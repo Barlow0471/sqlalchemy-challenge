@@ -36,6 +36,8 @@ def home():
         f"/api/v1.0/precipitation<br/>"
         f"/api/v1.0/stations<br/>"
         f"/api/v1.0/tobs<br/>"
+        f"/api/v1.0/<start><br/>"
+        f"/api/v1.0/<start>/<end>"
     )
 
 
@@ -82,19 +84,62 @@ def tobs():
 
     prevYear = recentDay - dt.timedelta(days=366)
 
-    results = session.query(Measurement.tobs).\
+    results = session.query(Measurement.date, Measurement.tobs).\
         filter(Measurement.date >= prevYear).\
-            filter(Measurement.station == most_active_station).all()
+            filter(Measurement.date <= recentDay).all()
     
+    tobs_list = []
+
+    for date, tobs in results:
+        tobs_dict = {}
+        tobs_dict[date] = tobs
+        tobs_list.append(tobs_dict)
+
     session.close()
 
-    # Create list of tobs
-    all_tobs = list(np.ravel(results))
+    return jsonify(tobs_list)
 
-    return jsonify(all_tobs)
+@app.route("/api/v1.0/<start>")
+def start(start):
+
+    session = Session(engine)
+
+    start_date = session.query(func.min(Measurement.date)).first()[0]
+    end_date = session.query(func.max(Measurement.date)).first()[0]
+
+    if start >= start_date and start_date <= end_date:
+        temp_calcs = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+            filter(Measurement.date >= start).filter(Measurement.date <= end_date).all()[0]
+
+        return (
+                f"Minimum Temperature: {temp_calcs[0]}</br>"
+                f"Average Temperature: {temp_calcs[1]}</br>"
+                f"Maximum Temperature: {temp_calcs[2]}"
+            )
+    else:
+        return jsonify(f"Date not found")
 
 
+@app.route("/api/v1.0/<start>/<end>")
+def start_end(start, end):
 
+    session = Session(engine)
+
+    start_date = session.query(func.min(Measurement.date)).first()[0]
+    end_date = session.query(func.max(Measurement.date)).first()[0]
+
+    if start >= start_date and end <= end_date:
+        temp_calcs = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+            filter(Measurement.date >= start).filter(Measurement.date <= end).all()[0]
+
+        return (
+                f"Minimum Temperature: {temp_calcs[0]}</br>"
+                f"Average Temperature: {temp_calcs[1]}</br>"
+                f"Maximum Temperature: {temp_calcs[2]}"
+            )
+
+    else:
+        return jsonify(f"Date not found")
 
 
 if __name__ == "__main__":
